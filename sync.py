@@ -20,8 +20,11 @@ def update_task(task_id, bts_ids):
     url = f"https://api.notion.com/v1/pages/{task_id}"
     data = {
         "properties": {
-            "BTS Relation": {
-                "relation": [{"id": bts_id} for bts_id in bts_ids]
+            "Bug Tracking System": {   # ✅ Task DB 속성명 그대로
+            "relation": [{"id": bts_id} for bts_id in matched_bts]
+    }
+}
+
             }
         }
     }
