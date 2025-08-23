@@ -8,6 +8,16 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
+
+    # ✅ 여기서 한 번에 Secrets → env 주입 (모든 step에서 사용됨)
+    env:
+      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+      TASK_DB_ID:    ${{ secrets.TASK_DB_ID }}
+      BTS_DB_ID:     ${{ secrets.BTS_DB_ID }}
+      TASK_REL_PROP: ${{ secrets.TASK_REL_PROP }}
+      TASK_VER_PROP: ${{ secrets.TASK_VER_PROP }}
+      BTS_VER_PROP:  ${{ secrets.BTS_VER_PROP }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -19,12 +29,16 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
+      # 🔍 디버그: env가 실제로 들어왔는지 확인 (값 내용은 안 찍음)
+      - name: Debug env (no secrets content)
+        run: |
+          python - <<'PY'
+          import os
+          keys = ["NOTION_TOKEN","TASK_DB_ID","BTS_DB_ID",
+                  "TASK_REL_PROP","TASK_VER_PROP","BTS_VER_PROP"]
+          for k in keys:
+              print(k, "=>", "set" if os.getenv(k) else "MISSING")
+          PY
+
       - name: Run script
-        env:
-          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          TASK_DB_ID: ${{ secrets.TASK_DB_ID }}
-          BTS_DB_ID: ${{ secrets.BTS_DB_ID }}
-          TASK_REL_PROP: ${{ secrets.TASK_REL_PROP }}
-          TASK_VER_PROP: ${{ secrets.TASK_VER_PROP }}
-          BTS_VER_PROP:  ${{ secrets.BTS_VER_PROP }}
         run: python sync.py
