@@ -1,12 +1,12 @@
 import requests
 import os
 
-NOTION_TOKEN = os.getenv("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")
-TASK_DB_ID = os.getenv("154ba496d7b880fba791c4cc9a94a13e")
-BTS_DB_ID = os.getenv("278e3be079ca4c9d98b409884b73fe6e")
+NOTION_TOKEN = os.getenv("NOTION_TOKEN")
+TASK_DB_ID = os.getenv("TASK_DB_ID")
+BTS_DB_ID = os.getenv("BTS_DB_ID")
 
 headers = {
-    "Authorization": f"Bearer {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}",
+    "Authorization": f"Bearer {NOTION_TOKEN}",
     "Content-Type": "application/json",
     "Notion-Version": "2022-06-28"
 }
