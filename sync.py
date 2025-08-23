@@ -1,55 +1,47 @@
-import requests
-import os
+import os, time, requests
 
+# ---- 환경변수(Secrets) ----
 NOTION_TOKEN = os.getenv("NOTION_TOKEN")
-TASK_DB_ID = os.getenv("TASK_DB_ID")
-BTS_DB_ID = os.getenv("BTS_DB_ID")
+TASK_DB_ID   = os.getenv("TASK_DB_ID")
+BTS_DB_ID    = os.getenv("BTS_DB_ID")
 
-headers = {
+# 속성 이름(다르면 여기만 바꾸세요)
+TASK_VER_PROP = os.getenv("TASK_VER_PROP", "Product Version")      # Task DB의 버전 속성명
+BTS_VER_PROP  = os.getenv("BTS_VER_PROP",  "Product Version")      # BTS DB의 버전 속성명
+TASK_REL_PROP = os.getenv("TASK_REL_PROP", "Bug Tracking System")  # Task DB의 Relation 속성명
+
+HEADERS = {
     "Authorization": f"Bearer {NOTION_TOKEN}",
     "Content-Type": "application/json",
-    "Notion-Version": "2022-06-28"
+    "Notion-Version": "2022-06-28",
 }
 
-def query_db(db_id):
+# ---------- 유틸 ----------
+def query_db_all(db_id):
+    """데이터베이스 전체 조회(페이지네이션 처리)."""
     url = f"https://api.notion.com/v1/databases/{db_id}/query"
-    res = requests.post(url, headers=headers)
-    res.raise_for_status()
-    return res.json()["results"]
+    results, payload = [], {}
+    while True:
+        res = requests.post(url, headers=HEADERS, json=payload)
+        res.raise_for_status()
+        data = res.json()
+        results.extend(data.get("results", []))
+        if not data.get("has_more"):
+            break
+        payload = {"start_cursor": data["next_cursor"]}
+        time.sleep(0.2)  # rate limit 여유
+    return results
 
-def update_task(task_id, bts_ids):
-    url = f"https://api.notion.com/v1/pages/{task_id}"
-    data = {
-        "properties": {
-            "Bug Tracking System": {   # ✅ Task DB Relation 속성 이름 그대로
-                "relation": [{"id": bts_id} for bts_id in bts_ids]
-            }
-        }
-    }
-    res = requests.patch(url, headers=headers, json=data)
-    res.raise_for_status()
-
-def main():
-    tasks = query_db(TASK_DB_ID)
-    bts_items = query_db(BTS_DB_ID)
-
-    for task in tasks:
-        task_props = task["properties"]
-        if "Product Version" not in task_props or not task_props["Product Version"]["select"]:
-            continue
-        task_ver = task_props["Product Version"]["select"]["name"]
-        task_id = task["id"]
-
-        matched_bts = []
-        for bts in bts_items:
-            bts_props = bts["properties"]
-            if "Product Version" in bts_props and bts_props["Product Version"]["select"]:
-                bts_ver = bts_props["Product Version"]["select"]["name"]
-                if bts_ver == task_ver:
-                    matched_bts.append(bts["id"])
-
-        if matched_bts:
-            update_task(task_id, matched_bts)
-
-if __name__ == "__main__":
-    main()
+def extract_versions(page, prop_name):
+    """select / multi_select / text(rich_text) 모두 지원 → set[str] 반환."""
+    p = page["properties"].get(prop_name)
+    if not p:
+        return set()
+    t = p.get("type")
+    if t == "select" and p["select"]:
+        return {p["select"]["name"]}
+    if t == "multi_select":
+        return {opt["name"] for opt in p["multi_select"]}
+    if t in ("rich_text", "title"):
+        # 텍스트 속성/제목에서 plain_text 추출
+        txt = "".join([b.get("p]()
