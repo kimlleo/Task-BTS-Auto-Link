@@ -1,14 +1,14 @@
 import os, time, requests
 
-# ---- Secrets (GitHub Actions에서 env로 주입) ----
+# ---- Secrets (GitHub Actions env) ----
 NOTION_TOKEN = os.getenv("NOTION_TOKEN")
 TASK_DB_ID   = os.getenv("TASK_DB_ID")
 BTS_DB_ID    = os.getenv("BTS_DB_ID")
 
-# 버전/관계 속성 이름(기본값). 이름을 쓰지 않고 자동탐지하므로 그대로 둬도 됨.
+# 속성명 기본값 (다르면 Secrets로 TASK_VER_PROP/BTS_VER_PROP/TASK_REL_PROP 덮어쓰기 가능)
 TASK_VER_PROP = os.getenv("TASK_VER_PROP", "Product Version")
 BTS_VER_PROP  = os.getenv("BTS_VER_PROP",  "Product Version")
-TASK_REL_PROP = os.getenv("TASK_REL_PROP", "Bug Tracking System")
+TASK_REL_PROP = os.getenv("TASK_REL_PROP", "Bug Tracking System")  # 폴백용
 
 HEADERS = {
     "Authorization": f"Bearer {NOTION_TOKEN}",
@@ -16,7 +16,9 @@ HEADERS = {
     "Notion-Version": "2022-06-28",
 }
 
+# -------------------- 유틸 --------------------
 def query_db_all(db_id):
+    """DB 전체 조회 (페이지네이션)"""
     url = f"https://api.notion.com/v1/databases/{db_id}/query"
     results, payload = [], {}
     while True:
@@ -30,6 +32,7 @@ def query_db_all(db_id):
     return results
 
 def extract_versions(page, prop_name):
+    """select / multi_select / text(rich_text) / title / status 지원 → set[str]"""
     p = page["properties"].get(prop_name)
     if not p: return set()
     t = p.get("type")
@@ -50,66 +53,32 @@ def get_title(page):
             return "".join([b.get("plain_text","") for b in v["title"]]) or "(untitled)"
     return "(untitled)"
 
-def find_rel_prop_key_for_bts(page):
-    """
-    이 페이지의 속성들 중에서 'relation' 이고 relation.database_id가 BTS_DB_ID 인 속성을 찾아
-    그 속성의 'id'를 반환. (이름/이모지 무시)
-    못 찾으면 TASK_REL_PROP(이름 키)로 폴백.
-    """
+# ---- 핵심: Task DB 스키마에서 BTS로 향하는 relation 속성 '이름'을 찾는다
+_REL_PROP_NAME_CACHE = None
+def detect_relation_prop_name():
+    global _REL_PROP_NAME_CACHE
+    if _REL_PROP_NAME_CACHE:
+        return _REL_PROP_NAME_CACHE
+
     norm = lambda s: (s or "").replace("-", "").lower()
     target = norm(BTS_DB_ID)
-    for name, prop in page["properties"].items():
-        if prop.get("type") == "relation":
-            rel = prop.get("relation", {})
-            dbid = rel.get("database_id")
-            if norm(dbid) == target:
-                return prop["id"]  # property ID로 업데이트
-    # 폴백: 이름으로 시도 (시크릿에 정확한 이름 넣었을 때 대비)
-    return TASK_REL_PROP
 
-def update_task_relations(task_page, bts_ids):
-    ids = list(dict.fromkeys(bts_ids))[:200]
-    prop_key = find_rel_prop_key_for_bts(task_page)
-    url = f"https://api.notion.com/v1/pages/{task_page['id']}"
-    body = {"properties": {prop_key: {"relation": [{"id": i} for i in ids]}}}
-    r = requests.patch(url, headers=HEADERS, json=body)
-    if r.status_code >= 400:
-        print("[error] update failed:", r.status_code, r.text)
+    url = f"https://api.notion.com/v1/databases/{TASK_DB_ID}"
+    r = requests.get(url, headers=HEADERS)
     r.raise_for_status()
+    schema = r.json()
 
-def main():
-    if not (NOTION_TOKEN and TASK_DB_ID and BTS_DB_ID):
-        raise SystemExit("Missing NOTION_TOKEN/TASK_DB_ID/BTS_DB_ID")
+    for name, prop in schema.get("properties", {}).items():
+        if prop.get("type") == "relation":
+            rel = prop.get("relation", {})  # <-- 스키마에는 dict로 들어있음
+            if norm(rel.get("database_id")) == target:
+                _REL_PROP_NAME_CACHE = name
+                print(f"[info] detected relation prop name: {name}")
+                return name
 
-    print("[info] querying databases...")
-    tasks = query_db_all(TASK_DB_ID)
-    bts_items = query_db_all(BTS_DB_ID)
+    # 못 찾으면 폴백 (Secrets로 지정했거나 수동 이름 사용)
+    print(f"[warn] relation to BTS DB not detected from schema; fallback to '{TASK_REL_PROP}'")
+    _REL_PROP_NAME_CACHE = TASK_REL_PROP
+    return _REL_PROP_NAME_CACHE
 
-    # BTS: version → [page_id...]
-    bts_by_ver = {}
-    for b in bts_items:
-        for v in extract_versions(b, BTS_VER_PROP):
-            if v:
-                bts_by_ver.setdefault(v, []).append(b["id"])
-    print(f"[info] BTS versions indexed: {len(bts_by_ver)}")
-
-    updated = 0
-    for t in tasks:
-        title = get_title(t)
-        vers = extract_versions(t, TASK_VER_PROP)
-        if not vers:
-            print(f"[skip] Task '{title}' has no version")
-            continue
-
-        matched = []
-        for v in vers:
-            matched.extend(bts_by_ver.get(v, []))
-        print(f"[match] Task '{title}' vers={list(vers)} -> BTS matched={len(matched)}")
-
-        update_task_relations(t, matched)
-        updated += 1
-
-    print(f"[done] tasks processed={updated}")
-
-if __name__ == "__main__":
-    main()
+def update_task_relations(
