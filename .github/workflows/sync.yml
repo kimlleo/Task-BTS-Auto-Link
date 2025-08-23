@@ -21,4 +21,7 @@ jobs:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           TASK_DB_ID: ${{ secrets.TASK_DB_ID }}
           BTS_DB_ID: ${{ secrets.BTS_DB_ID }}
+          TASK_REL_PROP: ${{ secrets.TASK_REL_PROP }}   # ← 추가
+          TASK_VER_PROP: ${{ secrets.TASK_VER_PROP }}   # ← 추가
+          BTS_VER_PROP:  ${{ secrets.BTS_VER_PROP }}    # ← 추가
         run: python sync.py
