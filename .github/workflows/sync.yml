@@ -23,4 +23,25 @@ jobs:
       - name: Debug env (no secrets content)
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          TASK_DB_ID: ${{ secrets.TASK_DB_
+          TASK_DB_ID: ${{ secrets.TASK_DB_ID }}
+          BTS_DB_ID: ${{ secrets.BTS_DB_ID }}
+          TASK_REL_PROP: ${{ secrets.TASK_REL_PROP }}
+          TASK_VER_PROP: ${{ secrets.TASK_VER_PROP }}
+          BTS_VER_PROP:  ${{ secrets.BTS_VER_PROP }}
+        run: |
+          python - <<'PY'
+          import os
+          keys = ["NOTION_TOKEN","TASK_DB_ID","BTS_DB_ID","TASK_REL_PROP","TASK_VER_PROP","BTS_VER_PROP"]
+          for k in keys:
+              print(k, "=>", "set" if os.getenv(k) else "MISSING")
+          PY
+
+      - name: Run script
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          TASK_DB_ID: ${{ secrets.TASK_DB_ID }}
+          BTS_DB_ID: ${{ secrets.BTS_DB_ID }}
+          TASK_REL_PROP: ${{ secrets.TASK_REL_PROP }}
+          TASK_VER_PROP: ${{ secrets.TASK_VER_PROP }}
+          BTS_VER_PROP:  ${{ secrets.BTS_VER_PROP }}
+        run: python sync.py
