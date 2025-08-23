@@ -1,27 +1,26 @@
 name: Notion Sync
 
 on:
+  workflow_dispatch:
   schedule:
-    - cron: "0 18 * * *"   # 매일 새벽 3시 (한국시간 = UTC+9)
-  workflow_dispatch:        # 수동 실행 버튼도 추가
+    - cron: "0 18 * * *"   # KST 새벽 3시
 
 jobs:
   run:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
+
       - name: Install dependencies
         run: pip install requests
-      - name: Run script
+
+      # (선택) 환경 변수 들어오는지 빠르게 체크
+      - name: Debug env (no secrets content)
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          TASK_DB_ID: ${{ secrets.TASK_DB_ID }}
-          BTS_DB_ID: ${{ secrets.BTS_DB_ID }}
-          TASK_REL_PROP: ${{ secrets.TASK_REL_PROP }}   # ← 추가
-          TASK_VER_PROP: ${{ secrets.TASK_VER_PROP }}   # ← 추가
-          BTS_VER_PROP:  ${{ secrets.BTS_VER_PROP }}    # ← 추가
-        run: python sync.py
+          TASK_DB_ID: ${{ secrets.TASK_DB_
